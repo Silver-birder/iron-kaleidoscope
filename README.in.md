@@ -170,18 +170,7 @@ To implement the lexer we'll use regular expressions. We have the next types of 
 The corresponding enumeration looks like this:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Token {
-    Def,
-    Extern,
-    Delimiter, //';' character
-    OpeningParenthesis,
-    ClosingParenthesis,
-    Comma,
-    Ident(String),
-    Number(f64),
-    Operator(String)
-}
+<<<src/lexer.rs:lexer-tokens>>>
 ```
 
 Note, that to use enumeration members without scopes as we later do, you need to
@@ -189,17 +178,7 @@ add some uses at the beginning of your module (it is needed since changing
 enums to be scoped in Rust):
 
 ```rust
-pub use self::Token::{
-    Def,
-    Extern,
-    Delimiter,
-    OpeningParenthesis,
-    ClosingParenthesis,
-    Comma,
-    Ident,
-    Number,
-    Operator
-};
+<<<src/lexer.rs:lexer-tokens-use>>>
 ```
 
 We do not mention those uses explicitly in the following.
@@ -207,54 +186,7 @@ We do not mention those uses explicitly in the following.
 Our parser function will accept a string with input characters and produce a vector of tokens. It will look like this:
 
 ```rust
-pub fn tokenize(input: &str) -> Vec<Token> {
-    // regex for commentaries (start with #, end with the line end)
-    let comment_re = regex!(r"(?m)#.*\n");
-    // remove commentaries from the input stream
-    let preprocessed = comment_re.replace_all(input, "\n");
-
-    let mut result = Vec::new();
-
-    // regex for token, just union of straightforward regexes for different token types
-    // operators are parsed the same way as identifier and separated later
-    let token_re = regex!(concat!(
-        r"(?P<ident>\p{Alphabetic}\w*)|",
-        r"(?P<number>\d+\.?\d*)|",
-        r"(?P<delimiter>;)|",
-        r"(?P<oppar>\()|",
-        r"(?P<clpar>\))|",
-        r"(?P<comma>,)|",
-        r"(?P<operator>\S)"));
-
-    for cap in token_re.captures_iter(preprocessed.as_str()) {
-        let token = if cap.name("ident").is_some() {
-            match cap.name("ident").unwrap() {
-                "def" => Def,
-                "extern" => Extern,
-                ident => Ident(ident.to_string())
-            }
-        } else if cap.name("number").is_some() {
-            match cap.name("number").unwrap().parse() {
-                Ok(number) => Number(number),
-                Err(_) => panic!("Lexer failed trying to parse number")
-            }
-        } else if cap.name("delimiter").is_some() {
-            Delimiter
-        } else if cap.name("oppar").is_some() {
-            OpeningParenthesis
-        } else if cap.name("clpar").is_some() {
-            ClosingParenthesis
-        } else if cap.name("comma").is_some() {
-            Comma
-        } else {
-            Operator(cap.name("operator").unwrap().to_string())
-        };
-
-        result.push(token)
-    }
-
-    result
-}
+<<<src/lexer.rs:lexer-tokenize>>>
 ```
 
 Quite simple function. About regex in Rust you can read [here](http://doc.rust-lang.org/regex/).
@@ -286,15 +218,7 @@ with the uppercase name terminals and correspond to the names in the `Token` enu
 in the lexer.
 
 ```{.ebnf .notation}
-program          : [[statement | expression] Delimiter ? ]*;
-statement        : [declaration | definition];
-declaration      : Extern prototype;
-definition       : Def prototype expression;
-prototype        : Ident OpeningParenthesis [Ident Comma ?]* ClosingParenthesis;
-expression       : [primary_expr (Op primary_expr)*];
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr];
-call_expr        : Ident OpeningParenthesis [expression Comma ?]* ClosingParenthesis;
-parenthesis_expr : OpeningParenthesis expression ClosingParenthesis;
+<<<grammar.ebnf:parser-grammar>>>
 ```
 
 ### The Abstract Syntax Tree (AST)
@@ -302,7 +226,7 @@ parenthesis_expr : OpeningParenthesis expression ClosingParenthesis;
 Now we'll create data types corresponding to every item in the Kaleidoscope grammar.
 
 ```{.ebnf .notation}
-program          : [[statement | expression] Delimiter ? ]*;
+<<<grammar.ebnf:parser-grammar-program>>>
 ```
 
 Program is a sequence of statements and expressions. To make life easier in the future we will
@@ -319,11 +243,7 @@ Vec<ASTNode>
 where `ASTNode` is defined as
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum ASTNode {
-    ExternNode(Prototype),
-    FunctionNode(Function)
-}
+<<<src/parser.rs:parser-astnode>>>
 ```
 
 `ExternNode` corresponds to the	`declaration` item in the grammar and `FunctionNode` corresponds to
@@ -332,22 +252,11 @@ the `definition` item.
 We define `Prototype` and `Function` according to the grammar:
 
 ```{.ebnf .notation}
-definition       : Def prototype expression;
-prototype        : Ident OpeningParenthesis [Ident Comma ?]* ClosingParenthesis;
+<<<grammar.ebnf:parser-grammar-defproto>>>
 ```
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub struct Function {
-    pub prototype: Prototype,
-    pub body: Expression
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub struct Prototype {
-    pub name: String,
-    pub args: Vec<String>
-}
+<<<src/parser.rs:parser-defproto>>>
 ```
 
 Functions are typed only by the number of arguments, as the onliest type
@@ -358,23 +267,14 @@ This one is the most complicated and difficult to parse, as it includes binary e
 with operator precedence.
 
 ```{.ebnf .notation}
-expression       : [primary_expr (Op primary_expr)*];
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr];
-call_expr        : Ident OpeningParenthesis [expression Comma ?]* ClosingParenthesis;
-parenthesis_expr : OpeningParenthesis expression ClosingParenthesis;
+<<<grammar.ebnf:parser-grammar-expr>>>
 ```
 
 `Expression` data type will be an `enum` with entries corresponding to every
 possible expression type:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Expression {
-    LiteralExpr(f64),
-    VariableExpr(String),
-    BinaryExpr(String, Box<Expression>, Box<Expression>),
-    CallExpr(String, Vec<Expression>)
-}
+<<<src/parser.rs:parser-expr>>>
 ```
 
 `LiteralExpr` is a number (`Number` token). `VariableExpr` is a variable name (`Ident` token).
@@ -407,13 +307,13 @@ As a result we will have again pair of a parsed AST and tokens that were not par
 Also we need some kind of error handling. It will be achieved by the usage of `Result` with an error message:
 
 ```rust
-pub type ParsingResult = Result<(Vec<ASTNode>, Vec<Token>), String>;
+<<<src/parser.rs:parser-result>>>
 ```
 
 The function prototype for the parsing function looks like this:
 
 ```rust
-pub fn parse(tokens : &[Token], parsed_tree : &[ASTNode], settings : &mut ParserSettings) -> ParsingResult
+<<<src/parser.rs:parser-parse-sign>>>
 pub fn parse(tokens : &[Token], parsed_tree : &[ASTNode], settings : &mut ParserSettings) -> ParsingResult;
 ```
 
@@ -442,19 +342,13 @@ They will have three possible results:
 Corresponding result data type looks like this:
 
 ```rust
-enum PartParsingResult<T> {
-    Good(T, Vec<Token>),
-    NotComplete,
-    Bad(String)
-}
+<<<src/parser.rs:parser-part-result>>>
 ```
 
 We will need a helper function for error generation:
 
 ```rust
-fn error<T>(message : &str) -> PartParsingResult<T> {
-    Bad(message.to_string())
-}
+<<<src/parser.rs:parser-error>>>
 ```
 
 This function and data type are generic as we will need to return objects of different types depending on what we are parsing (prototype, expression, etc.)
@@ -463,10 +357,7 @@ Top level parsing functions will return `ASTNode` which can be directly inserted
 We can implement first production rules in the topmost parsing function now:
 
 ```{.ebnf .notation}
-program          : [[statement | expression] Delimiter ? ]*;
-statement        : [declaration | definition];
-declaration      : Extern prototype;
-definition       : Def prototype expression;
+<<<grammar.ebnf:parser-grammar-top>>>
 ```
 
 As one can see from this piece of grammar, we have 3 top level items.
@@ -481,41 +372,7 @@ token it sees:
 With these points in mind we can implement the `parse` function this way:
 
 ```rust
-pub fn parse(tokens : &[Token], parsed_tree : &[ASTNode], settings : &mut ParserSettings) -> ParsingResult
-{
-    let mut rest = tokens.to_vec();
-    // we read tokens from the end of the vector
-    // using it as a stack
-    rest.reverse();
-
-    // we will add new AST nodes to already parsed ones
-    let mut ast = parsed_tree.to_vec();
-
-    loop {
-        // look at the current token and determine what to parse
-        // based on its value
-        let cur_token =
-            match rest.last() {
-                Some(token) => token.clone(),
-                None => break
-            };
-        let result = match cur_token {
-            Def => parse_function(&mut rest, settings),
-            Extern => parse_extern(&mut rest, settings),
-            Delimiter => {rest.pop(); continue},
-            _ => parse_expression(&mut rest, settings)
-        };
-        match result {
-            Good(ast_node, _) => ast.push(ast_node),
-            NotComplete => break,
-            Bad(message) => return Err(message)
-        }
-    }
-
-    // unparsed tokens
-    rest.reverse();
-    Ok((ast, rest))
-}
+<<<src/parser.rs:parser-parse>>>
 ```
 
 ### Helper macros for work with tokens
@@ -540,26 +397,7 @@ where `...` means additional parameters.
 The calling macro looks like this:
 
 ```rust
-macro_rules! parse_try(
-    ($function:ident, $tokens:ident, $settings:ident, $parsed_tokens:ident) => (
-        parse_try!($function, $tokens, $settings, $parsed_tokens,)
-    );
-
-    ($function:ident, $tokens:ident, $settings:ident, $parsed_tokens:ident, $($arg:expr),*) => (
-        match $function($tokens, $settings, $($arg),*) {
-            Good(ast, toks) => {
-                $parsed_tokens.extend(toks.into_iter());
-                ast
-            },
-            NotComplete => {
-                $parsed_tokens.reverse();
-                $tokens.extend($parsed_tokens.into_iter());
-                return NotComplete;
-            },
-            Bad(message) => return Bad(message)
-        }
-    )
-);
+<<<src/parser.rs:parser-parse-try>>>
 ```
 
 It declares two variants: with and without additional parameters. The first one calls the second one with zero additional
@@ -577,37 +415,7 @@ also tries to match with different alternatives, but if no one is matched, it ju
 last case no tokens from the input should be consumed by the macro itself.
 
 ```rust
-macro_rules! expect_token (
-    ([ $($token:pat, $value:expr, $result:stmt);+ ] <= $tokens:ident, $parsed_tokens:ident, $error:expr) => (
-        match $tokens.pop() {
-            $(
-                Some($token) => {
-                    $parsed_tokens.push($value);
-                    $result
-                },
-             )+
-             None => {
-                 $parsed_tokens.reverse();
-                 $tokens.extend($parsed_tokens.into_iter());
-                 return NotComplete;
-             },
-            _ => return error($error)
-        }
-    );
-
-    ([ $($token:pat, $value:expr, $result:stmt);+ ] else $not_matched:block <= $tokens:ident, $parsed_tokens:ident) => (
-        match $tokens.last().map(|i| {i.clone()}) {
-            $(
-                Some($token) => {
-                    $tokens.pop();
-                    $parsed_tokens.push($value);
-                    $result
-                },
-             )+
-            _ => {$not_matched}
-        }
-    )
-);
+<<<src/parser.rs:parser-expect-token>>>
 ```
 
 This macro automatically handles inserting tokens into the parsed tokens vector and returning of `NotComplete` (together with
@@ -619,21 +427,13 @@ We have two kinds of statements in the Kaleidoscope language: function
 declarations and function definitions:
 
 ```{.ebnf .notation}
-statement        : [declaration | definition];
-declaration      : Extern prototype;
-definition       : Def prototype expression;
+<<<grammar.ebnf:parser-grammar-statements>>>
 ```
 
 Let's start from the easier one: function declarations. The function is really straightforward:
 
 ```rust
-fn parse_extern(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<ASTNode> {
-    // eat Extern token
-    tokens.pop();
-    let mut parsed_tokens = vec![Extern];
-    let prototype = parse_try!(parse_prototype, tokens, settings, parsed_tokens);
-    Good(ExternNode(prototype), parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-extern>>>
 ```
 
 We eat `Extern` token and parse the function prototype. That's all.
@@ -641,15 +441,7 @@ We eat `Extern` token and parse the function prototype. That's all.
 Function definition is not very complicated also:
 
 ```rust
-fn parse_function(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<ASTNode> {
-    // eat Def token
-    tokens.pop();
-    let mut parsed_tokens = vec!(Def);
-    let prototype = parse_try!(parse_prototype, tokens, settings, parsed_tokens);
-    let body = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    Good(FunctionNode(Function{prototype: prototype, body: body}), parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-function>>>
 ```
 
 Again, we eat `Def` token, we parse prototype and function body. That's all.
@@ -658,32 +450,11 @@ So far we just called another parsing functions and matched some tokens (like `D
 That's time for some real parsing now.
 
 ```{.ebnf .notation}
-prototype        : Ident OpeningParenthesis [Ident Comma ?]* ClosingParenthesis;
+<<<grammar.ebnf:parser-grammar-proto>>>
 ```
 
 ```rust
-fn parse_prototype(tokens : &mut Vec<Token>, _settings : &mut ParserSettings) -> PartParsingResult<Prototype> {
-    let mut parsed_tokens = Vec::new();
-
-    let name = expect_token!([
-            Ident(name), Ident(name.clone()), name
-        ] <= tokens, parsed_tokens, "expected function name in prototype");
-
-    expect_token!(
-        [OpeningParenthesis, OpeningParenthesis, ()] <= tokens,
-        parsed_tokens, "expected '(' in prototype");
-
-    let mut args = Vec::new();
-    loop {
-        expect_token!([
-            Ident(arg), Ident(arg.clone()), args.push(arg.clone());
-            Comma, Comma, continue;
-            ClosingParenthesis, ClosingParenthesis, break
-        ] <= tokens, parsed_tokens, "expected ')' in prototype");
-    }
-
-    Good(Prototype{name: name, args: args}, parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-prototype>>>
 ```
 
 Function prototype starts with the function name. Then opening parenthesis goes.
@@ -696,13 +467,7 @@ The only top level item still left are top level expressions. To make
 further work with them easier, we close them in an anonymous function.
 
 ```rust
-fn parse_expression(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<ASTNode> {
-    let mut parsed_tokens = Vec::new();
-    let expression = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-    let prototype = Prototype{name: "".to_string(), args: vec![]};
-    let lambda = Function{prototype: prototype, body: expression};
-    Good(FunctionNode(lambda), parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-expression>>>
 ```
 
 Now, when we have code that handles parsing of all top level items, we can proceed
@@ -714,21 +479,11 @@ We will start from easier topic: parsing of primary expressions. Then we will us
 expressions parsing functions to parse operands of binary operators.
 
 ```{.ebnf .notation}
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr];
-call_expr        : Ident OpeningParenthesis [expression Comma ?]* ClosingParenthesis;
-parenthesis_expr : OpeningParenthesis expression ClosingParenthesis;
+<<<grammar.ebnf:parser-grammar-primary>>>
 ```
 
 ```rust
-fn parse_primary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    match tokens.last() {
-        Some(&Ident(_)) => parse_ident_expr(tokens, settings),
-        Some(&Number(_)) => parse_literal_expr(tokens, settings),
-        Some(&OpeningParenthesis) => parse_parenthesis_expr(tokens, settings),
-        None => return NotComplete,
-        _ => error("unknow token when expecting an expression")
-    }
-}
+<<<src/parser.rs:parser-parse-primary-expr>>>
 ```
 
 To start parsing of a primary expression we just look at the next token and
@@ -739,31 +494,7 @@ We start with parsing of identifier and call expressions. We use the same parsin
 for them, as they both start from the `Ident` token.
 
 ```rust
-fn parse_ident_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    let mut parsed_tokens = Vec::new();
-
-    let name = expect_token!(
-        [Ident(name), Ident(name.clone()), name] <= tokens,
-        parsed_tokens, "identificator expected");
-
-    expect_token!(
-        [OpeningParenthesis, OpeningParenthesis, ()]
-        else {return Good(VariableExpr(name), parsed_tokens)}
-        <= tokens, parsed_tokens);
-
-    let mut args = Vec::new();
-    loop {
-        expect_token!(
-            [ClosingParenthesis, ClosingParenthesis, break;
-             Comma, Comma, continue]
-            else {
-                args.push(parse_try!(parse_expr, tokens, settings, parsed_tokens));
-            }
-            <= tokens, parsed_tokens);
-    }
-
-    Good(CallExpr(name, args), parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-ident-expr>>>
 ```
 
 First, we parse the name (it will be the name of a variable or function to call).
@@ -778,33 +509,13 @@ but expressions now.
 Parsing of literal expressions is very straightforward:
 
 ```rust
-fn parse_literal_expr(tokens : &mut Vec<Token>, _settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    let mut parsed_tokens = Vec::new();
-
-    let value = expect_token!(
-        [Number(val), Number(val), val] <= tokens,
-        parsed_tokens, "literal expected");
-
-    Good(LiteralExpr(value), parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-literal-expr>>>
 ```
 
 Parenthesis expressions are also easy to parse:
 
 ```rust
-fn parse_parenthesis_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    // eat the opening parenthesis
-    tokens.pop();
-    let mut parsed_tokens = vec![OpeningParenthesis];
-
-    let expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    expect_token!(
-        [ClosingParenthesis, ClosingParenthesis, ()] <= tokens,
-        parsed_tokens, "')' expected");
-
-    Good(expr, parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-parenthesis-expr>>>
 ```
 
 Now, when we can parse primary expressions, it is the time for more complicated ones.
@@ -814,7 +525,7 @@ Now, when we can parse primary expressions, it is the time for more complicated 
 Our grammar for expressions looked like this:
 
 ```{.ebnf .notation}
-expression       : [primary_expr (Op primary_expr)*];
+<<<grammar.ebnf:parser-grammar-binary>>>
 ```
 
 The problem with this grammar is that it really does not reveal the semantics of binary expressions.
@@ -831,35 +542,20 @@ expressions. If they are not Lisp language compilers, of course.
 We will keep information about operator precedence in a map. That's where our `settings` structure is needed:
 
 ```rust
-pub struct ParserSettings {
-    operator_precedence: HashMap<String, i32>
-}
+<<<src/parser.rs:parser-settings>>>
 ```
 
 Let's create a function that fills this map with some operators:
 
 ```rust
-pub fn default_parser_settings() -> ParserSettings {
-    let mut operator_precedence = HashMap::new();
-    operator_precedence.insert("<".to_string(), 10);
-    operator_precedence.insert("+".to_string(), 20);
-    operator_precedence.insert("-".to_string(), 20);
-    operator_precedence.insert("*".to_string(), 40);
-
-    ParserSettings{operator_precedence: operator_precedence}
-}
+<<<src/parser.rs:parser-default-settings>>>
 ```
 
 A binary expression is a primary expression followed by zero or more `(operator, primary expression)` pairs.
 The expression parsing function looks like this:
 
 ```rust
-fn parse_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    let mut parsed_tokens = Vec::new();
-    let lhs = parse_try!(parse_primary_expr, tokens, settings, parsed_tokens);
-    let expr = parse_try!(parse_binary_expr, tokens, settings, parsed_tokens, 0, &lhs);
-    Good(expr, parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-expr>>>
 ```
 
 `parse_binary_expr` will return LHS if there are no `(operator, primary expression)` pairs or parse the whole expression.
@@ -884,51 +580,7 @@ continue until the current token is not an operator, or it is an
 operator with the precedence lesser than the minimal allowed one.
 
 ```rust
-fn parse_binary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings, expr_precedence : i32, lhs : &Expression) -> PartParsingResult<Expression> {
-    // start with LHS value
-    let mut result = lhs.clone();
-    let mut parsed_tokens = Vec::new();
-
-    loop {
-        // continue until the current token is not an operator
-        // or it is an operator with precedence lesser than expr_precedence
-        let (operator, precedence) = match tokens.last() {
-            Some(&Operator(ref op)) => match settings.operator_precedence.get(op) {
-                Some(pr) if *pr >= expr_precedence => (op.clone(), *pr),
-                None => return error("unknown operator found"),
-                _ => break
-            },
-            _ => break
-        };
-        tokens.pop();
-        parsed_tokens.push(Operator(operator.clone()));
-
-        // parse primary RHS expression
-        let mut rhs = parse_try!(parse_primary_expr, tokens, settings, parsed_tokens);
-
-        // parse all the RHS operators until their precedence is
-        // bigger than the current one
-        loop {
-            let binary_rhs = match tokens.last().map(|i| {i.clone()}) {
-                Some(Operator(ref op)) => match settings.operator_precedence.get(op).map(|i| {*i}) {
-                    Some(pr) if pr > precedence => {
-                        parse_try!(parse_binary_expr, tokens, settings, parsed_tokens, pr, &rhs)
-                    },
-                    None => return error("unknown operator found"),
-                    _ => break
-                },
-                _ => break
-            };
-
-            rhs = binary_rhs;
-        }
-
-        // merge LHS and RHS
-        result = BinaryExpr(operator, box result, box rhs);
-    }
-
-    Good(result, parsed_tokens)
-}
+<<<src/parser.rs:parser-parse-binary-expr>>>
 ```
 
 That's how parsing of binary expressions looks like.
@@ -948,107 +600,19 @@ start from command line options parsing. We will use
 [docopt](https://github.com/docopt/docopt.rs) library for this:
 
 ```rust
-use docopt::Docopt;
-
-const USAGE: &'static str = "
-Usage: iron_kaleidoscope [(-l | -p | -i)]
-
-Options:
-    -l  Run only lexer and show its output.
-    -p  Run only parser and show its output.
-    -i  Run only IR builder and show its output.
-";
-
-#[derive(Debug, RustcDecodable)]
-struct Args {
-    flag_l: bool,
-    flag_p: bool,
-    flag_i: bool
-}
-
-fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.decode())
-        .unwrap_or_else(|e| e.exit());
-
-    let stage = if args.flag_l {
-        Tokens
-    } else {
-        AST
-    };
-
-    main_loop(stage);
-}
+<<<src/main.rs:parser-main>>>
 ```
 
 The `Stage` enum is defined in the driver:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Stage {
-    AST,
-    Tokens
-}
+<<<src/driver.rs:parser-stage>>>
 ```
 
 Driver itself looks like this:
 
 ```rust
-pub fn main_loop(stage: Stage) {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut input = String::new();
-    let mut parser_settings = default_parser_settings();
-
-    'main: loop {
-        print!("> ");
-        stdout.flush().unwrap();
-        input.clear();
-        stdin.read_line(&mut input).ok().expect("Failed to read line");
-        if input.as_str() == ".quit\n" {
-            break;
-        }
-
-        // the constructed AST
-        let mut ast = Vec::new();
-        // tokens left from the previous lines
-        let mut prev = Vec::new();
-        loop {
-            let tokens = tokenize(input.as_str());
-            if stage == Tokens {
-                println!("{:?}", tokens);
-                continue 'main
-            }
-            prev.extend(tokens.into_iter());
-
-            let parsing_result = parse(prev.as_slice(), ast.as_slice(), &mut parser_settings);
-            match parsing_result {
-                Ok((parsed_ast, rest)) => {
-                    ast.extend(parsed_ast.into_iter());
-                    if rest.is_empty() {
-                        // we have parsed a full expression
-                        break
-                    } else {
-                        prev = rest;
-                    }
-                },
-                Err(message) => {
-                    println!("Error occured: {}", message);
-                    continue 'main
-                }
-            }
-            print!(". ");
-            stdout.flush().unwrap();
-            input.clear();
-            stdin.read_line(&mut input).ok().expect("Failed to read line");
-        }
-
-        if stage == AST {
-            println!("{:?}", ast);
-            continue
-        }
-    }
-}
+<<<src/driver.rs:parser-driver>>>
 ```
 
 [Full code for this chapter](https://github.com/jauhien/iron-kaleidoscope/tree/master/chapters/1).
@@ -1101,8 +665,7 @@ to [Cargo.toml file](https://github.com/jauhien/iron-kaleidoscope/blob/master/Ca
 importing necessary crates
 
 ```rust
-extern crate iron_llvm;
-extern crate llvm_sys;
+<<<src/lib.rs:ir-import>>>
 ```
 
 `iron-llvm` is still not published on [crates.io](https://crates.io/), this is why we use `github`
@@ -1130,77 +693,14 @@ double type.
 We'll pack context, IR builder, named values map and double type reference in a simple struct:
 
 ```rust
-use std::collections::HashMap;
-use llvm_sys::prelude::LLVMValueRef;
-
-use iron_llvm::core;
-use iron_llvm::core::types::{RealTypeCtor, RealTypeRef};
-use iron_llvm::{LLVMRef, LLVMRefCtor};
-
-pub struct Context {
-    context: core::Context,
-    builder: core::Builder,
-    named_values: HashMap<String, LLVMValueRef>,
-    ty: RealTypeRef
-}
-
-impl Context {
-    pub fn new() -> Context {
-
-        let context = core::Context::get_global();
-        let builder = core::Builder::new();
-        let named_values = HashMap::new();
-        let ty = RealTypeRef::get_double();
-
-        Context { context: context,
-                  builder: builder,
-                  named_values: named_values,
-                  ty: ty
-        }
-    }
-}
+<<<src/builder.rs:ir-context>>>
 ```
 
 For code genertion we will use one module. But we'll create for it
 a trait `ModuleProvider` as it will simplify adding a JIT-compiler later (not showing uses this time):
 
 ```rust
-pub trait ModuleProvider {
-    fn dump(&self);
-    fn get_module(&mut self) -> &mut core::Module;
-    fn get_function(&mut self, name: &str) -> Option<(FunctionRef, bool)>;
-}
-
-pub struct SimpleModuleProvider {
-    module: core::Module
-}
-
-impl SimpleModuleProvider {
-    pub fn new(name: &str) -> SimpleModuleProvider {
-        let module = core::Module::new(name);
-
-        SimpleModuleProvider {
-            module: module
-        }
-    }
-}
-
-impl ModuleProvider for SimpleModuleProvider {
-    fn dump(&self) {
-        self.module.dump();
-    }
-
-    fn get_module(&mut self) -> &mut core::Module {
-        &mut self.module
-    }
-
-    fn get_function(&mut self, name: &str) -> Option<(FunctionRef, bool)> {
-        match self.module.get_function_by_name(name) {
-            Some(f) => Some((f, f.count_basic_blocks() > 0)),
-            None => None
-        }
-    }
-}
+<<<src/builder.rs:ir-module-provider>>>
 ```
 
 Functions defined in this trait do the following:
@@ -1219,15 +719,7 @@ there will be only double typed values and functions.
 AST elements will implement a trait for code generation:
 
 ```rust
-pub type IRBuildingResult = Result<(LLVMValueRef, bool), String>;
-
-fn error(message : &str) -> IRBuildingResult {
-    Err(message.to_string())
-}
-
-pub trait IRBuilder {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult;
-}
+<<<src/builder.rs:ir-builder-trait>>>
 ```
 
 We return a pair here with second element showing if the value we generated was an anonymous function.
@@ -1240,34 +732,7 @@ Let's implement `IRBuilder` trait for top level data structures. For
 `ParsingResults`, AST tree and `ASTNode` it is really trivial:
 
 ```rust
-impl IRBuilder for parser::ParsingResult {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult {
-        match self {
-            &Ok((ref ast, _)) => ast.codegen(context, module_provider),
-            &Err(ref message) => Err(message.clone())
-        }
-    }
-}
-
-impl IRBuilder for Vec<parser::ASTNode> {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult {
-        let mut result = error("empty AST");
-        for node in self.iter() {
-            result = Ok(try!(node.codegen(context, module_provider)));
-        }
-
-        result
-    }
-}
-
-impl IRBuilder for parser::ASTNode {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult {
-        match self {
-            &parser::ExternNode(ref prototype) => prototype.codegen(context, module_provider),
-            &parser::FunctionNode(ref function) => function.codegen(context, module_provider)
-        }
-    }
-}
+<<<src/builder.rs:ir-top-level>>>
 ```
 
 We just call `codegen` function for underlying elements and return its results.
@@ -1280,42 +745,7 @@ real work there including handling of named function parameters.
 Code generation for prototypes looks like this:
 
 ```rust
-impl IRBuilder for parser::Prototype {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult {
-        // check if declaration with this name was already done
-        let function = match module_provider.get_function(&self.name) {
-            Some((prev_definition, redefinition)) => {
-                // we do not allow to redeclare functions with
-                // other signatures
-                if prev_definition.count_params() as usize != self.args.len() {
-                    return error("redefinition of function with different number of args")
-                }
-
-                // we do not allow to redefine/redeclare already
-                // defined functions (those that have the body)
-                if redefinition {
-                    return error("redefinition of function");
-                }
-
-                prev_definition
-            },
-            None => {
-                // function type is defined by number and types of
-                // the arguments
-                let mut param_types = iter::repeat(context.ty.to_ref()).take(self.args.len()).collect::<Vec<_>>();
-                let fty = FunctionTypeRef::get(&context.ty, param_types.as_mut_slice(), false);
-                FunctionRef::new(&mut module_provider.get_module(), &self.name, &fty)
-            }
-        };
-
-        // set correct parameters names
-        for (param, arg) in function.params_iter().zip(&self.args) {
-            param.set_name(arg);
-        }
-
-        Ok((function.to_ref(), false))
-    }
-}
+<<<src/builder.rs:ir-prototype>>>
 ```
 
 First we look if a function was already declared. If it was declared
@@ -1330,45 +760,7 @@ iterate through the parameters setting correct names for them.
 Function code generation looks like this:
 
 ```rust
-impl IRBuilder for parser::Function {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult {
-        // we have no global variables, so we can clear all the
-        // previously defined named values as they come from other functions
-        context.named_values.clear();
-
-        let (function, _) = try!(self.prototype.codegen(context, module_provider));
-        let mut function = unsafe {FunctionRef::from_ref(function)};
-
-        // basic block that will contain generated instructions
-        let mut bb = function.append_basic_block_in_context(&mut context.context, "entry");
-        context.builder.position_at_end(&mut bb);
-
-        // set function parameters
-        for (param, arg) in function.params_iter().zip(&self.prototype.args) {
-            context.named_values.insert(arg.clone(), param.to_ref());
-        }
-
-        // emit function body
-        // if error occured, remove the function, so user can
-        // redefine it
-        let body = match self.body.codegen(context, module_provider) {
-            Ok((value, _)) => value,
-            Err(message) => {
-                unsafe {LLVMDeleteFunction(function.to_ref())};
-                return Err(message);
-            }
-        };
-
-        // the last instruction should be return
-        context.builder.build_ret(&body);
-
-        function.verify(LLVMAbortProcessAction);
-
-        // clear local variables
-        context.named_values.clear();
-        Ok((function.to_ref(), self.prototype.name.as_str() == ""))
-    }
-}
+<<<src/builder.rs:ir-function>>>
 ```
 
 First we call `codegen` for prototype that returns [function
@@ -1403,84 +795,7 @@ appropriate language constructions. Here is the full function for reference,
 comments will follow:
 
 ```rust
-impl IRBuilder for parser::Expression {
-    fn codegen(&self, context: &mut Context, module_provider: &mut ModuleProvider) -> IRBuildingResult {
-        match self {
-
-
-            &parser::LiteralExpr(ref value) => {
-                Ok((RealConstRef::get(&context.ty, *value).to_ref(), false))
-            },
-
-
-            &parser::VariableExpr(ref name) => {
-                match context.named_values.get(name) {
-                    Some(value) => {
-                        Ok((*value, false))
-                    },
-                    None => error("unknown variable name")
-                }
-            },
-
-
-            &parser::BinaryExpr(ref name, ref lhs, ref rhs) => {
-                let (lhs_value, _) = try!(lhs.codegen(context, module_provider));
-                let (rhs_value, _) = try!(rhs.codegen(context, module_provider));
-
-                match name.as_str() {
-                    "+" => Ok((context.builder.build_fadd(lhs_value,
-                                                          rhs_value,
-                                                          "addtmp"),
-                               false)),
-                    "-" => Ok((context.builder.build_fsub(lhs_value,
-                                                          rhs_value,
-                                                          "subtmp"),
-                               false)),
-                    "*" => Ok((context.builder.build_fmul(lhs_value,
-                                                          rhs_value,
-                                                          "multmp"),
-                               false)),
-                    "<" => {
-                        let cmp = context.builder.build_fcmp(LLVMRealOLT,
-                                                             lhs_value,
-                                                             rhs_value,
-                                                             "cmptmp");
-
-                        // convert boolean to double 0.0 or 1.0
-                        Ok((context.builder.build_ui_to_fp(cmp,
-                                                           context.ty.to_ref(),
-                                                           "booltmp"),
-                            false))
-                    },
-                    _ => error("invalid binary operator")
-                }
-            },
-
-
-            &parser::CallExpr(ref name, ref args) => {
-                let (function, _) = match module_provider.get_function(name) {
-                    Some(function) => function,
-                    None => return error("unknown function referenced")
-                };
-
-                if function.count_params() as usize != args.len() {
-                    return error("incorrect number of arguments passed")
-                }
-
-                let mut args_value = Vec::new();
-                for arg in args.iter() {
-                    let (arg_value, _) = try!(arg.codegen(context, module_provider));
-                    args_value.push(arg_value);
-                }
-
-                Ok((context.builder.build_call(function.to_ref(),
-                                               args_value.as_mut_slice(),
-                                               "calltmp"),
-                    false))
-            }
-        }
-    }
-}
+<<<src/builder.rs:ir-expression>>>
 ```
 
 Let's have a look at match branches one by one.
@@ -1489,9 +804,7 @@ For `Literal` expression we just return a real constant with the
 appropriate value:
 
 ```rust
-            &parser::LiteralExpr(ref value) => {
-                Ok((RealConstRef::get(&context.ty, *value).to_ref(), false))
-            },
+<<<src/builder.rs:ir-literal>>>
 ```
 
 For variables we look in the `named_values` map and if there is such a
@@ -1499,14 +812,7 @@ variable there (a value that corresponds to the function argument),
 we return the value or emit an error otherwise:
 
 ```rust
-            &parser::VariableExpr(ref name) => {
-                match context.named_values.get(name) {
-                    Some(value) => {
-                        Ok((*value, false))
-                    },
-                    None => error("unknown variable name")
-                }
-            },
+<<<src/builder.rs:ir-variable>>>
 ```
 
 For binary expressions we do some real instructions generation. Remember,
@@ -1527,38 +833,7 @@ instruction based on the value of operator. For comparison we do
 additional type conversion as mentioned.
 
 ```rust
-            &parser::BinaryExpr(ref name, ref lhs, ref rhs) => {
-                let (lhs_value, _) = try!(lhs.codegen(context, module_provider));
-                let (rhs_value, _) = try!(rhs.codegen(context, module_provider));
-
-                match name.as_str() {
-                    "+" => Ok((context.builder.build_fadd(lhs_value,
-                                                          rhs_value,
-                                                          "addtmp"),
-                               false)),
-                    "-" => Ok((context.builder.build_fsub(lhs_value,
-                                                          rhs_value,
-                                                          "subtmp"),
-                               false)),
-                    "*" => Ok((context.builder.build_fmul(lhs_value,
-                                                          rhs_value,
-                                                          "multmp"),
-                               false)),
-                    "<" => {
-                        let cmp = context.builder.build_fcmp(LLVMRealOLT,
-                                                             lhs_value,
-                                                             rhs_value,
-                                                             "cmptmp");
-
-                        // convert boolean to double 0.0 or 1.0
-                        Ok((context.builder.build_ui_to_fp(cmp,
-                                                           context.ty.to_ref(),
-                                                           "booltmp"),
-                            false))
-                    },
-                    _ => error("invalid binary operator")
-                }
-            },
+<<<src/builder.rs:ir-binary>>>
 ```
 
 For call code generation we do function name lookup in the LLVM
@@ -1568,27 +843,7 @@ we generate a value for every argument and create the arguments
 vector.
 
 ```rust
-            &parser::CallExpr(ref name, ref args) => {
-                let (function, _) = match module_provider.get_function(name) {
-                    Some(function) => function,
-                    None => return error("unknown function referenced")
-                };
-
-                if function.count_params() as usize != args.len() {
-                    return error("incorrect number of arguments passed")
-                }
-
-                let mut args_value = Vec::new();
-                for arg in args.iter() {
-                    let (arg_value, _) = try!(arg.codegen(context, module_provider));
-                    args_value.push(arg_value);
-                }
-
-                Ok((context.builder.build_call(function.to_ref(),
-                                               args_value.as_mut_slice(),
-                                               "calltmp"),
-                    false))
-            }
+<<<src/builder.rs:ir-call>>>
 ```
 
 That's all for code generation. You can easily add new operators to
@@ -1740,18 +995,7 @@ and apply its passes when function generation is complete.
 Function pass manager initialization is straightforward:
 
 ```rust
-pub fn new_module(name: &str) -> (core::Module, core::FunctionPassManager) {
-    let module = core::Module::new(name);
-    let mut function_passmanager = core::FunctionPassManager::new(&module);
-    function_passmanager.add_basic_alias_analysis_pass();
-    function_passmanager.add_instruction_combining_pass();
-    function_passmanager.add_reassociate_pass();
-    function_passmanager.add_GVN_pass();
-    function_passmanager.add_CFG_simplification_pass();
-    function_passmanager.initialize();
-
-    (module, function_passmanager)
-}
+<<<src/builder.rs:jit-fpm>>>
 ```
 
 We create module and function pass manager associated with it. Then we
@@ -1763,76 +1007,13 @@ We'll store function pass manager togerther with module in our `SimpleModuleProv
 (also we'll change the `ModuleProvider` trait):
 
 ```rust
-pub trait ModuleProvider {
-    fn dump(&self);
-    fn get_module(&mut self) -> &mut core::Module;
-    fn get_function(&mut self, name: &str) -> Option<(FunctionRef, bool)>;
-    fn get_pass_manager(&mut self) -> &mut core::FunctionPassManager;
-}
-
-pub struct SimpleModuleProvider {
-    function_passmanager: core::FunctionPassManager,
-    module: core::Module
-}
-
-impl SimpleModuleProvider {
-    pub fn new(name: &str) -> SimpleModuleProvider {
-        let (module, function_passmanager) = new_module(name);
-
-        SimpleModuleProvider {
-            function_passmanager: function_passmanager,
-            module: module
-        }
-    }
-}
-
-impl ModuleProvider for SimpleModuleProvider {
-    fn dump(&self) {
-        self.module.dump();
-    }
-
-    fn get_module(&mut self) -> &mut core::Module {
-        &mut self.module
-    }
-
-    fn get_function(&mut self, name: &str) -> Option<(FunctionRef, bool)> {
-        match self.module.get_function_by_name(name) {
-            Some(f) => Some((f, f.count_basic_blocks() > 0)),
-            None => None
-        }
-    }
-
-    fn get_pass_manager(&mut self) -> &mut core::FunctionPassManager {
-        &mut self.function_passmanager
-    }
-}
+<<<src/builder.rs:jit-mp>>>
 ```
 
 Now we run our passes on every created function before return it:
 
 ```rust
-        // emit function body
-        // if error occured, remove the function, so user can
-        // redefine it
-        let body = match self.body.codegen(context, module_provider) {
-            Ok((value, _)) => value,
-            Err(message) => {
-                unsafe {LLVMDeleteFunction(function.to_ref())};
-                return Err(message);
-            }
-        };
-
-        // the last instruction should be return
-        context.builder.build_ret(&body);
-
-        function.verify(LLVMAbortProcessAction);
-        module_provider.get_pass_manager().run(&mut function);
-
-        // clear local variables
-        context.named_values.clear();
-        Ok((function.to_ref(), self.prototype.name.as_str() == ""))
-    }
-}
+<<<src/builder.rs:jit-run-passes>>>
 ```
 
 We can try to run our example again and see if optimization helps:
@@ -1870,12 +1051,7 @@ Let's define a simple trait for JIT compiler (note, that our compiler will own a
 the modules that we will have):
 
 ```rust
-pub trait JITter : builder::ModuleProvider {
-    // TODO: fix https://github.com/rust-lang/rust/issues/5665
-    fn get_module_provider(&mut self) -> &mut builder::ModuleProvider;
-
-    fn run_function(&mut self, f: LLVMValueRef) -> f64;
-}
+<<<src/jitter.rs:jit-jitter>>>
 ```
 
 For IR generation we need a module, so our jit-compiler will be a module provider
@@ -1906,41 +1082,21 @@ defined in other modules, so they can be called.
 Let's define a container for execution engines and frozen modules first:
 
 ```rust
-struct ModulesContainer {
-    execution_engines: Vec<ExecutionEngine>,
-    modules: Vec<FrozenModule>
-}
+<<<src/jitter.rs:jit-mc>>>
 ```
 
 Now we will define a method for looking for function addresses in already
 compiled modules (if nothing found we are returning zero):
 
 ```rust
-impl ModulesContainer {
-    fn get_function_address(&self, name: &str) -> u64 {
-        for ee in &self.execution_engines {
-            let addr = ee.get_function_address(name);
-            if addr != 0 {
-                return addr;
-            }
-        }
-
-        0
-    }
-}
+<<<src/jitter.rs:jit-mc-address>>>
 ```
 
 JIT-compiler itself will contain current open module, associated function pass manager
 and container with already compiled stuff:
 
 ```rust
-pub struct MCJITter {
-    module_name: String,
-    current_module: core::Module,
-    function_passmanager: core::FunctionPassManager,
-
-    container: Rc<RefCell<ModulesContainer>>
-}
+<<<src/jitter.rs:jit-mcjitter>>>
 ```
 
 There is one tricky moment with the container: we make it be internally mutable reference counted
@@ -1955,61 +1111,20 @@ in the Rust book or consult with [detailed](https://doc.rust-lang.org/nightly/st
 Now we are going to implement `MCJITter` internal methods. Constructor is trivial:
 
 ```rust
-    pub fn new(name: &str) -> MCJITter {
-        let (current_module, function_passmanager) = builder::new_module(name);
-
-        MCJITter {
-            module_name: String::from(name),
-            current_module: current_module,
-            function_passmanager: function_passmanager,
-
-            container: Rc::new(RefCell::new(ModulesContainer {
-                execution_engines: vec![],
-                modules: vec![]
-            }))
-        }
-    }
+<<<src/jitter.rs:jit-mcjitter-ctor>>>
 ```
 
 The method for closing current module is where the magic of execution engine creation happens:
 
 ```rust
-    fn close_current_module(& mut self) {
-        let (new_module, new_function_passmanager) = builder::new_module(&self.module_name);
-        self.function_passmanager = new_function_passmanager;
-        let current_module = std::mem::replace(&mut self.current_module, new_module);
-
-        let container = self.container.clone();
-        let memory_manager = BindingSectionMemoryManagerBuilder::new()
-            .set_get_symbol_address(move |mut parent_mm, name| {
-                let addr = parent_mm.get_symbol_address(name);
-                if addr != 0 {
-                    return addr;
-                }
-
-                container.borrow().get_function_address(name)
-            })
-            .create();
-
-        let (execution_engine, module) = match MCJITBuilder::new()
-            .set_mcjit_memory_manager(Box::new(memory_manager))
-            .create(current_module) {
-                Ok((ee, module)) => (ee, module),
-                Err(msg) => panic!(msg)
-            };
-
-        self.container.borrow_mut().execution_engines.push(execution_engine);
-        self.container.borrow_mut().modules.push(module);
-    }
+<<<src/jitter.rs:jit-mcjitter-close-module>>>
 ```
 
 We create new module and pass manager first. Note the use of `std::mem::replace`,
 so we can move only from one record field.
 
 ```rust
-        let (new_module, new_function_passmanager) = builder::new_module(&self.module_name);
-        self.function_passmanager = new_function_passmanager;
-        let current_module = std::mem::replace(&mut self.current_module, new_module);
+<<<src/jitter.rs:jit-mcjitter-new-module>>>
 ```
 
 Then we create a custom memory manager for our execution engine. The symbol resolution
@@ -2017,28 +1132,13 @@ is just a closure that owns a reference to our modules container. It asks defaul
 manager first, than it looks in already compiled modules:
 
 ```rust
-        let container = self.container.clone();
-        let memory_manager = BindingSectionMemoryManagerBuilder::new()
-            .set_get_symbol_address(move |mut parent_mm, name| {
-                let addr = parent_mm.get_symbol_address(name);
-                if addr != 0 {
-                    return addr;
-                }
-
-                container.borrow().get_function_address(name)
-            })
-            .create();
+<<<src/jitter.rs:jit-mcjitter-mm>>>
 ```
 
 Now we can create the execution engine for the current module:
 
 ```rust
-        let (execution_engine, module) = match MCJITBuilder::new()
-            .set_mcjit_memory_manager(Box::new(memory_manager))
-            .create(current_module) {
-                Ok((ee, module)) => (ee, module),
-                Err(msg) => panic!(msg)
-            };
+<<<src/jitter.rs:jit-mcjitter-ee>>>
 ```
 
 `create` method returns execution engine and a frozen module.
@@ -2046,8 +1146,7 @@ Now we can create the execution engine for the current module:
 Finally we update our modules and execution engines container:
 
 ```rust
-        self.container.borrow_mut().execution_engines.push(execution_engine);
-        self.container.borrow_mut().modules.push(module);
+<<<src/jitter.rs:jit-mcjitter-container-update>>>
 ```
 
 Now, as we have a method for execution engine creation on module closing
@@ -2057,19 +1156,7 @@ implementation of `ModuleProvider` and `JITter` traits.
 `dump`, `get_module` and `get_pass_manager` are really simple:
 
 ```rust
-    fn dump(&self) {
-        for module in self.container.borrow().modules.iter() {
-            module.get().dump()
-        }
-        self.current_module.dump();
-    }
-
-    fn get_module(&mut self) -> &mut core::Module {
-        &mut self.current_module
-    }
-    fn get_pass_manager(&mut self) -> &mut core::FunctionPassManager {
-        &mut self.function_passmanager
-    }
+<<<src/jitter.rs:jit-mcjitter-mp-simple>>>
 ```
 
 Note, that we dump already compiled modules first and then our currently open module.
@@ -2099,40 +1186,7 @@ found, as one will be created in the current module.
 Code for `get_function` follows:
 
 ```rust
-    fn get_function(&mut self, name: &str) -> Option<(FunctionRef, bool)> {
-        for module in &self.container.borrow().modules {
-            let funct = match module.get().get_function_by_name(name) {
-                Some(f) => {
-                    f
-                },
-                None => continue
-            };
-
-            let proto = match self.current_module.get_function_by_name(name) {
-                Some(f) => {
-                    if funct.count_basic_blocks() != 0 && f.count_basic_blocks() != 0 {
-                        panic!("redefinition of function across modules")
-                    }
-                    f
-                },
-                None => {
-                    // TODO: fix iron-llvm get_type
-                    let fty = unsafe { FunctionTypeRef::from_ref(funct.get_type().to_ref()) };
-                    let fty = unsafe { FunctionTypeRef::from_ref(fty.get_return_type().to_ref()) };
-                    FunctionRef::new(&mut self.current_module, name, &fty)
-                }
-            };
-
-            if funct.count_basic_blocks() > 0 {
-                return Some((proto, true))
-            }
-        }
-
-        match self.current_module.get_function_by_name(name) {
-            Some(f) => Some((f, f.count_basic_blocks() > 0)),
-            None => None
-        }
-    }
+<<<src/jitter.rs:jit-mcjitter-mp-gf>>>
 ```
 
 Implementation of the `JITter` trait is straightforward.
@@ -2145,22 +1199,7 @@ ensures that we have all the necessary prototypes and correct
 symbol resolution.
 
 ```rust
-impl JITter for MCJITter {
-    fn get_module_provider(&mut self) -> &mut builder::ModuleProvider {
-        self
-    }
-
-    fn run_function(&mut self, f: LLVMValueRef) -> f64 {
-        self.close_current_module();
-        let f = unsafe {FunctionRef::from_ref(f)};
-        let mut args = vec![];
-        let res = self.container.borrow()
-            .execution_engines.last().expect("MCJITter went crazy")
-            .run_function(&f, args.as_mut_slice());
-        let ty = RealTypeRef::get_double();
-        res.to_float(&ty)
-    }
-}
+<<<src/jitter.rs:jit-mcjitter-jitter>>>
 ```
 
 ### Changes in the driver and 'built-in' functions
@@ -2170,15 +1209,7 @@ and with `MCJITter` (when having REPL with jit-compiling). To make it easier,
 we will implement `JITter` trait for `SimpleModuleProvider`:
 
 ```rust
-impl JITter for builder::SimpleModuleProvider {
-    fn get_module_provider(&mut self) -> &mut builder::ModuleProvider {
-        self
-    }
-
-    fn run_function(&mut self, _f: LLVMValueRef) -> f64 {
-        panic!("not implemented (and will not be)")
-    }
-}
+<<<src/jitter.rs:jit-smp>>>
 ```
 
 Now we will use an appropriate `ir-container` in the driver and depending on the
@@ -2186,119 +1217,7 @@ stage and type of expression that user has entered we will dump IR or compile an
 Also we need to initialize native target for JIT-compiler.
 
 ```rust
-use std::io;
-use std::io::Write;
-
-use iron_llvm::core::value::Value;
-use iron_llvm::target;
-
-use builder;
-use builder::{IRBuilder, ModuleProvider};
-use jitter;
-use jitter::JITter;
-use lexer::*;
-use parser::*;
-
-pub use self::Stage::{
-    Exec,
-    IR,
-    AST,
-    Tokens
-};
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum Stage {
-    Exec,
-    IR,
-    AST,
-    Tokens
-}
-
-pub fn main_loop(stage: Stage) {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut input = String::new();
-    let mut parser_settings = default_parser_settings();
-    let mut ir_container : Box<JITter> = if stage == Exec {
-        target::initilalize_native_target();
-        target::initilalize_native_asm_printer();
-        jitter::init();
-        Box::new(
-            jitter::MCJITter::new("main")
-                )
-    } else {
-        Box::new(
-            builder::SimpleModuleProvider::new("main")
-                )
-    };
-
-    let mut builder_context = builder::Context::new();
-
-
-    'main: loop {
-        print!("> ");
-        stdout.flush().unwrap();
-        input.clear();
-        stdin.read_line(&mut input).ok().expect("Failed to read line");
-        if input.as_str() == ".quit\n" {
-            break;
-        }
-
-        // the constructed AST
-        let mut ast = Vec::new();
-        // tokens left from the previous lines
-        let mut prev = Vec::new();
-        loop {
-            let tokens = tokenize(input.as_str());
-            if stage == Tokens {
-                println!("{:?}", tokens);
-                continue 'main
-            }
-            prev.extend(tokens.into_iter());
-
-            let parsing_result = parse(prev.as_slice(), ast.as_slice(), &mut parser_settings);
-            match parsing_result {
-                Ok((parsed_ast, rest)) => {
-                    ast.extend(parsed_ast.into_iter());
-                    if rest.is_empty() {
-                        // we have parsed a full expression
-                        break
-                    } else {
-                        prev = rest;
-                    }
-                },
-                Err(message) => {
-                    println!("Error occured: {}", message);
-                    continue 'main
-                }
-            }
-            print!(". ");
-            stdout.flush().unwrap();
-            input.clear();
-            stdin.read_line(&mut input).ok().expect("Failed to read line");
-        }
-
-        if stage == AST {
-            println!("{:?}", ast);
-            continue
-        }
-
-        match ast.codegen(&mut builder_context,
-                          ir_container.get_module_provider()) {
-            Ok((value, runnable)) =>
-                if runnable && stage == Exec {
-                    println!("=> {}", ir_container.run_function(value));
-                } else {
-                    value.dump();
-                },
-            Err(message) => println!("Error occured: {}", message)
-        }
-    }
-
-    if stage == IR || stage == Exec {
-        ir_container.dump();
-    }
-}
+<<<src/driver.rs:ch-3>>>
 ```
 
 You can see also call of the `init` function that will be explained in a moment, just ignore
@@ -2308,53 +1227,7 @@ Now we modify the main function appropriately, so it calls the main loop
 for the `Exec` stage by default.
 
 ```rust
-extern crate rustc_serialize;
-extern crate docopt;
-
-extern crate iron_kaleidoscope;
-
-use iron_kaleidoscope::driver::{main_loop,
-                                Exec,
-                                IR,
-                                AST,
-                                Tokens
-};
-
-use docopt::Docopt;
-
-const USAGE: &'static str = "
-Usage: iron_kaleidoscope [(-l | -p | -i)]
-
-Options:
-    -l  Run only lexer and show its output.
-    -p  Run only parser and show its output.
-    -i  Run only IR builder and show its output.
-";
-
-#[derive(Debug, RustcDecodable)]
-struct Args {
-    flag_l: bool,
-    flag_p: bool,
-    flag_i: bool
-}
-
-fn main() {
-    let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.decode())
-        .unwrap_or_else(|e| e.exit());
-
-    let stage = if args.flag_l {
-        Tokens
-    } else if args.flag_p {
-        AST
-    } else if args.flag_i {
-        IR
-    } else {
-        Exec
-    };
-
-    main_loop(stage);
-}
+<<<src/main.rs:ch-3>>>
 ```
 
 Let's see how does it work now:
@@ -2453,22 +1326,7 @@ to use functions from libraries such as `sin`. What more, we can define our own
 their addresses in LLVM with `add_symbol` function:
 
 ```rust
-pub extern fn printd(x: f64) -> f64 {
-    println!("> {} <", x);
-    x
-}
-
-pub extern fn putchard(x: f64) -> f64 {
-    print!("{}", x as u8 as char);
-    x
-}
-
-pub fn init() {
-    unsafe {
-        add_symbol("printd", printd as *const ());
-        add_symbol("putchard", putchard as *const ());
-    }
-}
+<<<src/jitter.rs:jit-builtin>>>
 ```
 
 That's all, we are able to call rust functions now:
@@ -2548,122 +1406,19 @@ We will evaluate only one branch (this is important, as we can have side effects
 Let's start from formal grammar definition (only the relevant part of the grammar is shown):
 
 ```{.ebnf .notation}
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr | conditional_expr];
-conditional_expr : If expression Then expression Else expression;
+<<<grammar.ebnf:if-grammar>>>
 ```
 
 where `If`, `Then`, `Else` are new tokens that we're going to add to the lexer:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Token {
-    Def,
-    Extern,
-    If,
-    Then,
-    Else,
-    Delimiter, //';' character
-    OpeningParenthesis,
-    ClosingParenthesis,
-    Comma,
-    Ident(String),
-    Number(f64),
-    Operator(String)
-}
-
-pub fn tokenize(input: &str) -> Vec<Token> {
-    // regex for commentaries (start with #, end with the line end)
-    let comment_re = regex!(r"(?m)#.*\n");
-    // remove commentaries from the input stream
-    let preprocessed = comment_re.replace_all(input, "\n");
-
-    let mut result = Vec::new();
-
-    // regex for token, just union of straightforward regexes for different token types
-    // operators are parsed the same way as identifier and separated later
-    let token_re = regex!(concat!(
-        r"(?P<ident>\p{Alphabetic}\w*)|",
-        r"(?P<number>\d+\.?\d*)|",
-        r"(?P<delimiter>;)|",
-        r"(?P<oppar>\()|",
-        r"(?P<clpar>\))|",
-        r"(?P<comma>,)|",
-        r"(?P<operator>\S)"));
-
-    for cap in token_re.captures_iter(preprocessed.as_str()) {
-        let token = if cap.name("ident").is_some() {
-            match cap.name("ident").unwrap() {
-                "def" => Def,
-                "extern" => Extern,
-                "if" => If,
-                "then" => Then,
-                "else" => Else,
-                ident => Ident(ident.to_string())
-            }
-        } else if cap.name("number").is_some() {
-            match cap.name("number").unwrap().parse() {
-                Ok(number) => Number(number),
-                Err(_) => panic!("Lexer failed trying to parse number")
-            }
-        } else if cap.name("delimiter").is_some() {
-            Delimiter
-        } else if cap.name("oppar").is_some() {
-            OpeningParenthesis
-        } else if cap.name("clpar").is_some() {
-            ClosingParenthesis
-        } else if cap.name("comma").is_some() {
-            Comma
-        } else {
-            Operator(cap.name("operator").unwrap().to_string())
-        };
-
-        result.push(token)
-    }
-
-    result
-}
+<<<src/lexer.rs:if-lexer>>>
 ```
 
 Lexer extension is completely staightforward, parser is not much more complicated:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Expression {
-    LiteralExpr(f64),
-    VariableExpr(String),
-    BinaryExpr(String, Box<Expression>, Box<Expression>),
-    ConditionalExpr{cond_expr: Box<Expression>, then_expr: Box<Expression>, else_expr: Box<Expression>},
-    CallExpr(String, Vec<Expression>)
-}
-
-fn parse_primary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    match tokens.last() {
-        Some(&Ident(_)) => parse_ident_expr(tokens, settings),
-        Some(&Number(_)) => parse_literal_expr(tokens, settings),
-        Some(&If) => parse_conditional_expr(tokens, settings),
-        Some(&OpeningParenthesis) => parse_parenthesis_expr(tokens, settings),
-        None => return NotComplete,
-        _ => error("unknow token when expecting an expression")
-    }
-}
-
-fn parse_conditional_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    tokens.pop();
-    let mut parsed_tokens = vec![If];
-    let cond_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    expect_token!(
-        [Then, Then, ()] <= tokens,
-        parsed_tokens, "expected then");
-    let then_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    expect_token!(
-        [Else, Else, ()] <= tokens,
-        parsed_tokens, "expected else");
-    let else_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    Good(ConditionalExpr{cond_expr: box cond_expr, then_expr: box then_expr, else_expr: box else_expr}, parsed_tokens)
-}
+<<<src/parser.rs:if-parser>>>
 ```
 
 First we extend our AST. Then we extend primary expression parsing
@@ -2753,72 +1508,25 @@ The IR does this:
 You see what do we want, let's add the necessary part to our IR builder:
 
 ```rust
-            &parser::ConditionalExpr{ref cond_expr, ref then_expr, ref else_expr} => {
-                let (cond_value, _) = try!(cond_expr.codegen(context, module_provider));
-                let zero = RealConstRef::get(&context.ty, 0.0);
-                let ifcond = context.builder.build_fcmp(LLVMRealONE, cond_value, zero.to_ref(), "ifcond");
-
-                let block = context.builder.get_insert_block();
-                let mut function = block.get_parent();
-                let mut then_block = function.append_basic_block_in_context(&mut context.context, "then");
-                let mut else_block = function.append_basic_block_in_context(&mut context.context, "else");
-                let mut merge_block = function.append_basic_block_in_context(&mut context.context, "ifcont");
-                context.builder.build_cond_br(ifcond, &then_block, &else_block);
-
-                context.builder.position_at_end(&mut then_block);
-                let (then_value, _) = try!(then_expr.codegen(context, module_provider));
-                context.builder.build_br(&merge_block);
-                let then_end_block = context.builder.get_insert_block();
-
-                context.builder.position_at_end(&mut else_block);
-                let (else_value, _) = try!(else_expr.codegen(context, module_provider));
-                context.builder.build_br(&merge_block);
-                let else_end_block = context.builder.get_insert_block();
-
-                context.builder.position_at_end(&mut merge_block);
-                // TODO: fix builder methods, so they generate the
-                // right instruction
-                let mut phi = unsafe {
-                    PHINodeRef::from_ref(context.builder.build_phi(context.ty.to_ref(), "ifphi"))
-                };
-                phi.add_incoming(vec![then_value].as_mut_slice(), vec![then_end_block].as_mut_slice());
-                phi.add_incoming(vec![else_value].as_mut_slice(), vec![else_end_block].as_mut_slice());
-
-                Ok((phi.to_ref(), false))
-            },
+<<<src/builder.rs:if-builder>>>
 ```
 
 Quite straightforward implementation of the described algorithm. Let's look at it line by line.
 
 ```rust
-                let (cond_value, _) = try!(cond_expr.codegen(context, module_provider));
-                let zero = RealConstRef::get(&context.ty, 0.0);
-                let ifcond = context.builder.build_fcmp(LLVMRealONE, cond_value, zero.to_ref(), "ifcond");
+<<<src/builder.rs:if-builder-cond>>>
 ```
 
 Here we evaluate condition and compare it with zero.
 
 ```rust
-                let block = context.builder.get_insert_block();
-                let mut function = block.get_parent();
-                let mut then_block = function.append_basic_block_in_context(&mut context.context, "then");
-                let mut else_block = function.append_basic_block_in_context(&mut context.context, "else");
-                let mut merge_block = function.append_basic_block_in_context(&mut context.context, "ifcont");
-                context.builder.build_cond_br(ifcond, &then_block, &else_block);
+<<<src/builder.rs:if-builder-br>>>
 ```
 
 Generate a bunch of basic blocks and conditionally branch to `then` or `else` one.
 
 ```rust
-                context.builder.position_at_end(&mut then_block);
-                let (then_value, _) = try!(then_expr.codegen(context, module_provider));
-                context.builder.build_br(&merge_block);
-                let then_end_block = context.builder.get_insert_block();
-
-                context.builder.position_at_end(&mut else_block);
-                let (else_value, _) = try!(else_expr.codegen(context, module_provider));
-                context.builder.build_br(&merge_block);
-                let else_end_block = context.builder.get_insert_block();
+<<<src/builder.rs:if-builder-then-else>>>
 ```
 
 Position at the branch block, evaluate its value and branch to the `merge` basic block.
@@ -2826,16 +1534,7 @@ Note, that we remember the end block of `then` and `else` branches as it can be 
 from their starting blocks.
 
 ```rust
-                context.builder.position_at_end(&mut merge_block);
-                // TODO: fix builder methods, so they generate the
-                // right instruction
-                let mut phi = unsafe {
-                    PHINodeRef::from_ref(context.builder.build_phi(context.ty.to_ref(), "ifphi"))
-                };
-                phi.add_incoming(vec![then_value].as_mut_slice(), vec![then_end_block].as_mut_slice());
-                phi.add_incoming(vec![else_value].as_mut_slice(), vec![else_end_block].as_mut_slice());
-
-                Ok((phi.to_ref(), false))
+<<<src/builder.rs:if-builder-merge>>>
 ```
 
 Build phi operation and add incoming values to it. Return its value as the result.
@@ -2939,149 +1638,21 @@ will be a possibility to write code that computes some values using loops.
 Let's start from the grammar again:
 
 ```{.ebnf .notation}
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr | conditional_expr | loop_expr];
-loop_expr        : For Ident Op= expression Comma expression [Comma expression]? In expression;
+<<<grammar.ebnf:for-grammar>>>
 ```
 
 We are going to add `For` and `In` tokens to our parser. `Op=` means operator token
 with value `=`.
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Token {
-    Def,
-    Extern,
-    If,
-    Then,
-    Else,
-    For,
-    In,
-    Delimiter, //';' character
-    OpeningParenthesis,
-    ClosingParenthesis,
-    Comma,
-    Ident(String),
-    Number(f64),
-    Operator(String)
-}
-
-pub fn tokenize(input: &str) -> Vec<Token> {
-    // regex for commentaries (start with #, end with the line end)
-    let comment_re = regex!(r"(?m)#.*\n");
-    // remove commentaries from the input stream
-    let preprocessed = comment_re.replace_all(input, "\n");
-
-    let mut result = Vec::new();
-
-    // regex for token, just union of straightforward regexes for different token types
-    // operators are parsed the same way as identifier and separated later
-    let token_re = regex!(concat!(
-        r"(?P<ident>\p{Alphabetic}\w*)|",
-        r"(?P<number>\d+\.?\d*)|",
-        r"(?P<delimiter>;)|",
-        r"(?P<oppar>\()|",
-        r"(?P<clpar>\))|",
-        r"(?P<comma>,)|",
-        r"(?P<operator>\S)"));
-
-    for cap in token_re.captures_iter(preprocessed.as_str()) {
-        let token = if cap.name("ident").is_some() {
-            match cap.name("ident").unwrap() {
-                "def" => Def,
-                "extern" => Extern,
-                "if" => If,
-                "then" => Then,
-                "else" => Else,
-                "for" => For,
-                "in" => In,
-                ident => Ident(ident.to_string())
-            }
-        } else if cap.name("number").is_some() {
-            match cap.name("number").unwrap().parse() {
-                Ok(number) => Number(number),
-                Err(_) => panic!("Lexer failed trying to parse number")
-            }
-        } else if cap.name("delimiter").is_some() {
-            Delimiter
-        } else if cap.name("oppar").is_some() {
-            OpeningParenthesis
-        } else if cap.name("clpar").is_some() {
-            ClosingParenthesis
-        } else if cap.name("comma").is_some() {
-            Comma
-        } else {
-            Operator(cap.name("operator").unwrap().to_string())
-        };
-
-        result.push(token)
-    }
-
-    result
-}
+<<<src/lexer.rs:for-lexer>>>
 ```
 
 Parser is also quite simple with one thing to note about handling of the optional
 part of the grammar:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Expression {
-    LiteralExpr(f64),
-    VariableExpr(String),
-    BinaryExpr(String, Box<Expression>, Box<Expression>),
-    ConditionalExpr{cond_expr: Box<Expression>, then_expr: Box<Expression>, else_expr: Box<Expression>},
-    LoopExpr{var_name: String, start_expr: Box<Expression>, end_expr: Box<Expression>, step_expr: Box<Expression>, body_expr: Box<Expression>},
-    CallExpr(String, Vec<Expression>)
-}
-
-fn parse_primary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    match tokens.last() {
-        Some(&Ident(_)) => parse_ident_expr(tokens, settings),
-        Some(&Number(_)) => parse_literal_expr(tokens, settings),
-        Some(&If) => parse_conditional_expr(tokens, settings),
-        Some(&For) => parse_loop_expr(tokens, settings),
-        Some(&OpeningParenthesis) => parse_parenthesis_expr(tokens, settings),
-        None => return NotComplete,
-        _ => error("unknow token when expecting an expression")
-    }
-}
-
-fn parse_loop_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    tokens.pop();
-    let mut parsed_tokens = vec![For];
-    let var_name = expect_token!(
-        [Ident(name), Ident(name.clone()), name] <= tokens,
-        parsed_tokens, "expected identifier after for");
-
-    expect_token!(
-        [Operator(op), Operator(op.clone()), {
-            if op.as_str() != "=" {
-                return error("expected '=' after for")
-            }
-        }] <= tokens,
-        parsed_tokens, "expected '=' after for");
-
-    let start_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    expect_token!(
-        [Comma, Comma, ()] <= tokens,
-        parsed_tokens, "expected ',' after for start value");
-
-    let end_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    let step_expr = expect_token!(
-        [Comma, Comma, parse_try!(parse_expr, tokens, settings, parsed_tokens)]
-        else {LiteralExpr(1.0)}
-        <= tokens, parsed_tokens);
-
-    expect_token!(
-        [In, In, ()] <= tokens,
-        parsed_tokens, "expected 'in' after for");
-
-    let body_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    Good(LoopExpr{var_name: var_name, start_expr: box start_expr, end_expr: box end_expr, step_expr: box step_expr, body_expr: box body_expr}, parsed_tokens)
-}
+<<<src/parser.rs:for-parser>>>
 ```
 
 If we do not encounter `Comma` that should go before the optional step value,
@@ -3126,52 +1697,7 @@ All the concepts that we see here are familiar (phi expression, branches, basic 
 We will generate similar code.
 
 ```rust
-            &parser::LoopExpr{ref var_name, ref start_expr, ref end_expr, ref step_expr, ref body_expr} => {
-                let (start_value, _) = try!(start_expr.codegen(context, module_provider));
-
-                let preheader_block = context.builder.get_insert_block();
-                let mut function = preheader_block.get_parent();
-
-                let mut preloop_block = function.append_basic_block_in_context(&mut context.context, "preloop");
-                context.builder.build_br(&preloop_block);
-                context.builder.position_at_end(&mut preloop_block);
-
-                let mut variable = unsafe {
-                    PHINodeRef::from_ref(context.builder.build_phi(context.ty.to_ref(), var_name))
-                };
-                variable.add_incoming(vec![start_value].as_mut_slice(), vec![preheader_block].as_mut_slice());
-                let old_value = context.named_values.remove(var_name);
-                context.named_values.insert(var_name.clone(), variable.to_ref());
-
-                let (end_value, _) = try!(end_expr.codegen(context, module_provider));
-                let zero = RealConstRef::get(&context.ty, 0.0);
-                let end_cond = context.builder.build_fcmp(LLVMRealONE, end_value, zero.to_ref(), "loopcond");
-
-                let mut after_block = function.append_basic_block_in_context(&mut context.context, "afterloop");
-                let mut loop_block = function.append_basic_block_in_context(&mut context.context, "loop");
-
-                context.builder.build_cond_br(end_cond, &loop_block, &after_block);
-
-                context.builder.position_at_end(&mut loop_block);
-                try!(body_expr.codegen(context, module_provider));
-
-                let (step_value, _) = try!(step_expr.codegen(context, module_provider));
-                let next_value = context.builder.build_fadd(variable.to_ref(), step_value, "nextvar");
-                let loop_end_block = context.builder.get_insert_block();
-                variable.add_incoming(vec![next_value].as_mut_slice(), vec![loop_end_block].as_mut_slice());
-
-                context.builder.build_br(&preloop_block);
-
-                context.builder.position_at_end(&mut after_block);
-
-                context.named_values.remove(var_name);
-                match old_value {
-                    Some(value) => {context.named_values.insert(var_name.clone(), value);},
-                    None => ()
-                };
-
-                Ok((zero.to_ref(), false))
-            }
+<<<src/builder.rs:for-builder>>>
 ```
 
 This code should contain nothing new (familiar phi, branches and other machinery) apart
@@ -3309,7 +1835,7 @@ We need to change our grammar for prototypes to reflect the possibility to
 have binary operators definitions:
 
 ```{.ebnf .notation}
-prototype        : [Ident | Binary Op Number ?] OpeningParenthesis [Ident Comma ?]* ClosingParenthesis;
+<<<grammar.ebnf:binary-grammar>>>
 ```
 
 Note that we do not change grammar for expressions.
@@ -3333,18 +1859,7 @@ that shows that this given function is an operator. To this aim let's
 add a function type field to the prototype:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub struct Prototype {
-    pub name: String,
-    pub ftype: FunctionType,
-    pub args: Vec<String>
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum FunctionType {
-    Normal,
-    BinaryOp(String, i32)
-}
+<<<src/parser.rs:binary-proto>>>
 ```
 
 For normal functions we hold no additional information, for binary
@@ -3355,23 +1870,7 @@ first how we'll change code for function parsing if prototype
 parsing already works:
 
 ```rust
-fn parse_function(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<ASTNode> {
-    // eat Def token
-    tokens.pop();
-    let mut parsed_tokens = vec!(Def);
-    let prototype = parse_try!(parse_prototype, tokens, settings, parsed_tokens);
-
-    match prototype.ftype {
-        BinaryOp(ref symbol, precedence) => {
-            settings.operator_precedence.insert(symbol.clone(), precedence);
-        },
-        _ => ()
-    };
-
-    let body = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    Good(FunctionNode(Function{prototype: prototype, body: body}), parsed_tokens)
-}
+<<<src/parser.rs:ops-parse-func>>>
 ```
 
 The only thing we've added here is a match on the function type.
@@ -3385,51 +1884,7 @@ operators.
 Now the changes for prototype parsing come:
 
 ```rust
-fn parse_prototype(tokens : &mut Vec<Token>, _settings : &mut ParserSettings) -> PartParsingResult<Prototype> {
-    let mut parsed_tokens = Vec::new();
-
-    let (name, ftype) = expect_token!([
-            Ident(name), Ident(name.clone()), (name, Normal);
-            Binary, Binary, {
-                let op = expect_token!([
-                        Operator(op), Operator(op.clone()), op
-                    ] <= tokens, parsed_tokens, "expected binary operator");
-                let precedence = expect_token!(
-                    [Number(value), Number(value), value as i32]
-                    else {30}
-                    <= tokens, parsed_tokens);
-
-                if precedence < 1 || precedence > 100 {
-                    return error("invalid precedecnce: must be 1..100");
-                }
-
-                ("binary".to_string() + &op, BinaryOp(op, precedence))
-            }
-        ] <= tokens, parsed_tokens, "expected function name in prototype");
-
-    expect_token!(
-        [OpeningParenthesis, OpeningParenthesis, ()] <= tokens,
-        parsed_tokens, "expected '(' in prototype");
-
-    let mut args = Vec::new();
-    loop {
-        expect_token!([
-            Ident(arg), Ident(arg.clone()), args.push(arg.clone());
-            Comma, Comma, continue;
-            ClosingParenthesis, ClosingParenthesis, break
-        ] <= tokens, parsed_tokens, "expected ')' in prototype");
-    }
-
-    match ftype {
-        BinaryOp(_, _) => if args.len() != 2 {
-            return error("invalid number of operands for binary operator")
-        },
-        _ => ()
-    };
-
-
-    Good(Prototype{name: name, args: args, ftype: ftype}, parsed_tokens)
-}
+<<<src/parser.rs:binary-parse-proto>>>
 ```
 
 Here we literally implement changes in our grammar and make
@@ -3444,52 +1899,7 @@ binary operators. That's all with parsing, let's switch to IR generation
 which is even simpler.
 
 ```rust
-            &parser::BinaryExpr(ref name, ref lhs, ref rhs) => {
-                let (lhs_value, _) = try!(lhs.codegen(context, module_provider));
-                let (rhs_value, _) = try!(rhs.codegen(context, module_provider));
-
-                match name.as_str() {
-                    "+" => Ok((context.builder.build_fadd(lhs_value,
-                                                          rhs_value,
-                                                          "addtmp"),
-                               false)),
-                    "-" => Ok((context.builder.build_fsub(lhs_value,
-                                                          rhs_value,
-                                                          "subtmp"),
-                               false)),
-                    "*" => Ok((context.builder.build_fmul(lhs_value,
-                                                          rhs_value,
-                                                          "multmp"),
-                               false)),
-                    "<" => {
-                        let cmp = context.builder.build_fcmp(LLVMRealOLT,
-                                                             lhs_value,
-                                                             rhs_value,
-                                                             "cmptmp");
-
-                        // convert boolean to double 0.0 or 1.0
-                        Ok((context.builder.build_ui_to_fp(cmp,
-                                                           context.ty.to_ref(),
-                                                           "booltmp"),
-                            false))
-                    },
-                    op => {
-                        let name = "binary".to_string() + op;
-
-                        let (function, _) = match module_provider.get_function(&name) {
-                            Some(function) => function,
-                            None => return error("binary operator not found")
-                        };
-
-                        let mut args_value = vec![lhs_value, rhs_value];
-
-                        Ok((context.builder.build_call(function.to_ref(),
-                                                       args_value.as_mut_slice(),
-                                                       "binop"),
-                            false))
-                    }
-                }
-            },
+<<<src/builder.rs:binary-builder>>>
 ```
 
 We just change here the default branch of the match on the operator name the
@@ -3506,9 +1916,7 @@ in previous chapters. For unary operators we need to add some more pieces. But l
 from the grammar:
 
 ```{.ebnf .notation}
-prototype        : [Ident | Binary Op Number ? | Unary Op] OpeningParenthesis [Ident Comma ?]* ClosingParenthesis;
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr | conditional_expr | loop_expr | unary_expr];
-unary_expr:      : Op primary_expr;
+<<<grammar.ebnf:unary-grammar>>>
 ```
 
 We add new type of prototype and new primary expression.
@@ -3518,77 +1926,19 @@ Implementing starts from the lexer where we add `Unary` token.
 Then we add new AST node to the parser:
 
 ```rust
-    UnaryExpr(String, Box<Expression>),
+<<<src/parser.rs:unary-ast>>>
 ```
 
 and new function type:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum FunctionType {
-    Normal,
-    UnaryOp(String),
-    BinaryOp(String, i32)
-}
+<<<src/parser.rs:unary-ftype>>>
 ```
 
 Function parsing stays the same. Prototype parsing changes according to the grammar:
 
 ```rust
-fn parse_prototype(tokens : &mut Vec<Token>, _settings : &mut ParserSettings) -> PartParsingResult<Prototype> {
-    let mut parsed_tokens = Vec::new();
-
-    let (name, ftype) = expect_token!([
-            Ident(name), Ident(name.clone()), (name, Normal);
-            Unary, Unary, {
-                let op = expect_token!([
-                        Operator(op), Operator(op.clone()), op
-                    ] <= tokens, parsed_tokens, "expected unary operator");
-                ("unary".to_string() + &op, UnaryOp(op))
-            };
-            Binary, Binary, {
-                let op = expect_token!([
-                        Operator(op), Operator(op.clone()), op
-                    ] <= tokens, parsed_tokens, "expected binary operator");
-                let precedence = expect_token!(
-                    [Number(value), Number(value), value as i32]
-                    else {30}
-                    <= tokens, parsed_tokens);
-
-                if precedence < 1 || precedence > 100 {
-                    return error("invalid precedecnce: must be 1..100");
-                }
-
-                ("binary".to_string() + &op, BinaryOp(op, precedence))
-            }
-        ] <= tokens, parsed_tokens, "expected function name in prototype");
-
-    expect_token!(
-        [OpeningParenthesis, OpeningParenthesis, ()] <= tokens,
-        parsed_tokens, "expected '(' in prototype");
-
-    let mut args = Vec::new();
-    loop {
-        expect_token!([
-            Ident(arg), Ident(arg.clone()), args.push(arg.clone());
-            Comma, Comma, continue;
-            ClosingParenthesis, ClosingParenthesis, break
-        ] <= tokens, parsed_tokens, "expected ')' in prototype");
-    }
-
-    match ftype {
-        UnaryOp(_) => if args.len() != 1 {
-            return error("invalid number of operands for unary operator")
-        },
-        BinaryOp(_, _) => if args.len() != 2 {
-            return error("invalid number of operands for binary operator")
-        },
-        _ => ()
-    };
-
-
-    Good(Prototype{name: name, args: args, ftype: ftype}, parsed_tokens)
-}
+<<<src/parser.rs:unary-parse-proto>>>
 ```
 
 We name functions for unary operators `unary@` similar to the binary case
@@ -3597,52 +1947,14 @@ and ensure that they accept exactly one argument.
 Then we add parsing of unary expressions:
 
 ```rust
-fn parse_primary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    match tokens.last() {
-        Some(&Ident(_)) => parse_ident_expr(tokens, settings),
-        Some(&Number(_)) => parse_literal_expr(tokens, settings),
-        Some(&If) => parse_conditional_expr(tokens, settings),
-        Some(&For) => parse_loop_expr(tokens, settings),
-        Some(&Operator(_)) => parse_unary_expr(tokens, settings),
-        Some(&OpeningParenthesis) => parse_parenthesis_expr(tokens, settings),
-        None => return NotComplete,
-        _ => error("unknow token when expecting an expression")
-    }
-}
-
-fn parse_unary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    let mut parsed_tokens = Vec::new();
-
-    let name = expect_token!(
-        [Operator(name), Operator(name.clone()), name] <= tokens,
-        parsed_tokens, "unary operator expected");
-
-    let operand = parse_try!(parse_primary_expr, tokens, settings, parsed_tokens);
-
-    Good(UnaryExpr(name, box operand), parsed_tokens)
-}
+<<<src/parser.rs:unary-parse-expr>>>
 ```
 
 IR building for unary expressions is also simple (just a call
 to appropriate function):
 
 ```rust
-            &parser::UnaryExpr(ref operator, ref operand) => {
-                let (operand, _) = try!(operand.codegen(context, module_provider));
-
-                let name = "unary".to_string() + operator;
-                let (function, _) = match module_provider.get_function(name.as_str()) {
-                    Some(function) => function,
-                    None => return error("unary operator not found")
-                };
-
-                let mut args_value = vec![operand];
-
-                Ok((context.builder.build_call(function.to_ref(),
-                                                args_value.as_mut_slice(),
-                                                "unop"),
-                    false))
-            },
+<<<src/builder.rs:unary-builder>>>
 ```
 
 ### Painting the Mandelbrot set
@@ -4094,8 +2406,7 @@ In order to mutate variables we'll add new `=` operator and in order to define n
 add new syntactic construction:
 
 ```{.ebnf .notation}
-primary_expr     : [Ident | Number | call_expr | parenthesis_expr | conditional_expr | loop_expr | unary_expr | var_expr];
-var_expr         : Var Ident [Op= expression]? [Comma Ident [Op= expression]?]* In expression;
+<<<grammar.ebnf:mutable-grammar-var>>>
 ```
 
 Here is a small example of what we'll be able to do with these new possibilities:
@@ -4136,13 +2447,7 @@ change code working with it so it uses memory locations instead.
 First we'll need to create memory allocas:
 
 ```rust
-fn create_entry_block_alloca(context: &mut Context, function: &FunctionRef, var_name: &str) -> LLVMValueRef {
-    let mut builder = core::Builder::new();
-    let mut bb = function.get_entry();
-    let fi = bb.get_first_instruction();
-    builder.position(&mut bb, &fi);
-    builder.build_alloca(context.ty.to_ref(), var_name)
-}
+<<<src/builder.rs:mutable-alloca>>>
 ```
 
 This code creates a new builder, positions it at the beginning of the function and builds
@@ -4152,12 +2457,7 @@ We have two types of variables now: function parameters and loop variables. Let'
 for them when they are defined:
 
 ```rust
-        // set function parameters
-        for (param, arg) in function.params_iter().zip(&self.prototype.args) {
-            let arg_alloca = create_entry_block_alloca(context, &function, arg);
-            context.builder.build_store(param.to_ref(), arg_alloca);
-            context.named_values.insert(arg.clone(), arg_alloca);
-        }
+<<<src/builder.rs:mutable-param-alloca>>>
 ```
 
 This code replaces old one in functions codegeneration. We create an alloca, store parameter value
@@ -4167,17 +2467,14 @@ In a loop expression we just create an alloca and store value in it in place of 
 generation:
 
 ```rust
-                let variable = create_entry_block_alloca(context, &function, var_name);
-                context.builder.build_store(start_value, variable);
+<<<src/builder.rs:mutable-loop-alloca>>>
 ```
 
 Now we are going to change variables usage. There are two places where we need to do so. First
 the loop expression (again, no manual phi node manipulation now):
 
 ```rust
-                let cur_value = context.builder.build_load(variable, var_name);
-                let next_value = context.builder.build_fadd(cur_value, step_value, "nextvar");
-                context.builder.build_store(next_value, variable);
+<<<src/builder.rs:mutable-loop-load>>>
 ```
 
 We load current value here, calculate the next one and store it.
@@ -4185,15 +2482,7 @@ We load current value here, calculate the next one and store it.
 The other place we change is the variable expression:
 
 ```rust
-            &parser::VariableExpr(ref name) => {
-                match context.named_values.get(name) {
-                    Some(value) => {
-                        let var = context.builder.build_load(*value, name);
-                        Ok((var, false))
-                    },
-                    None => error("unknown variable name")
-                }
-            },
+<<<src/builder.rs:mutable-variable>>>
 ```
 
 Let's see what IR will be generated now:
@@ -4229,7 +2518,7 @@ ifcont:                                           ; preds = %entry, %else
 We are ready to generate SSA form now. It is surprisingly easy, just add one pass:
 
 ```rust
-    function_passmanager.add_promote_memory_to_register_pass();
+<<<src/builder.rs:mutable-pass>>>
 ```
 
 Kaleidoscope REPL starts to generate what we want:
@@ -4297,38 +2586,13 @@ Implementing assignment operator is completely straightforward. First we add it 
 the table of predefined operators:
 
 ```rust
-pub fn default_parser_settings() -> ParserSettings {
-    let mut operator_precedence = HashMap::new();
-    operator_precedence.insert("=".to_string(), 2);
-    operator_precedence.insert("<".to_string(), 10);
-    operator_precedence.insert("+".to_string(), 20);
-    operator_precedence.insert("-".to_string(), 20);
-    operator_precedence.insert("*".to_string(), 40);
-
-    ParserSettings{operator_precedence: operator_precedence}
-}
+<<<src/parser.rs:mutable-parser-default-settings>>>
 ```
 
 Then we implement codegen for it:
 
 ```rust
-                if name.as_str() == "=" {
-                    let var_name = match **lhs {
-                        parser::VariableExpr(ref nm) => nm,
-                        _ => return error("destination of '=' must be a variable")
-                    };
-
-                    let (value, _) = try!(rhs.codegen(context, module_provider));
-
-                    let variable = match context.named_values.get(var_name) {
-                        Some(vl) => *vl,
-                        None => return error("unknown variable name")
-                    };
-
-                    context.builder.build_store(value, variable);
-
-                    return Ok((value, false))
-                }
+<<<src/builder.rs:mutable-assignment-codegen>>>
 ```
 
 We codegen differently comparing to other binary operators. First we
@@ -4361,83 +2625,7 @@ Introduction of local variables starts like every change in syntax from the lexe
 (grammar was already defined above):
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Token {
-    Def,
-    Extern,
-    If,
-    Then,
-    Else,
-    For,
-    In,
-    Binary,
-    Unary,
-    Var,
-    Delimiter, //';' character
-    OpeningParenthesis,
-    ClosingParenthesis,
-    Comma,
-    Ident(String),
-    Number(f64),
-    Operator(String)
-}
-
-pub fn tokenize(input: &str) -> Vec<Token> {
-    // regex for commentaries (start with #, end with the line end)
-    let comment_re = regex!(r"(?m)#.*\n");
-    // remove commentaries from the input stream
-    let preprocessed = comment_re.replace_all(input, "\n");
-
-    let mut result = Vec::new();
-
-    // regex for token, just union of straightforward regexes for different token types
-    // operators are parsed the same way as identifier and separated later
-    let token_re = regex!(concat!(
-        r"(?P<ident>\p{Alphabetic}\w*)|",
-        r"(?P<number>\d+\.?\d*)|",
-        r"(?P<delimiter>;)|",
-        r"(?P<oppar>\()|",
-        r"(?P<clpar>\))|",
-        r"(?P<comma>,)|",
-        r"(?P<operator>\S)"));
-
-    for cap in token_re.captures_iter(preprocessed.as_str()) {
-        let token = if cap.name("ident").is_some() {
-            match cap.name("ident").unwrap() {
-                "def" => Def,
-                "extern" => Extern,
-                "if" => If,
-                "then" => Then,
-                "else" => Else,
-                "for" => For,
-                "in" => In,
-                "binary" => Binary,
-                "unary" => Unary,
-                "var" => Var,
-                ident => Ident(ident.to_string())
-            }
-        } else if cap.name("number").is_some() {
-            match cap.name("number").unwrap().parse() {
-                Ok(number) => Number(number),
-                Err(_) => panic!("Lexer failed trying to parse number")
-            }
-        } else if cap.name("delimiter").is_some() {
-            Delimiter
-        } else if cap.name("oppar").is_some() {
-            OpeningParenthesis
-        } else if cap.name("clpar").is_some() {
-            ClosingParenthesis
-        } else if cap.name("comma").is_some() {
-            Comma
-        } else {
-            Operator(cap.name("operator").unwrap().to_string())
-        };
-
-        result.push(token)
-    }
-
-    result
-}
+<<<src/lexer.rs:mutable-var-lexer>>>
 ```
 
 We just add new keyword `var` here.
@@ -4445,68 +2633,7 @@ We just add new keyword `var` here.
 Than we change parser:
 
 ```rust
-#[derive(PartialEq, Clone, Debug)]
-pub enum Expression {
-    LiteralExpr(f64),
-    VariableExpr(String),
-    UnaryExpr(String, Box<Expression>),
-    BinaryExpr(String, Box<Expression>, Box<Expression>),
-    ConditionalExpr{cond_expr: Box<Expression>, then_expr: Box<Expression>, else_expr: Box<Expression>},
-    LoopExpr{var_name: String, start_expr: Box<Expression>, end_expr: Box<Expression>, step_expr: Box<Expression>, body_expr: Box<Expression>},
-    VarExpr{vars: Vec<(String, Expression)>, body_expr: Box<Expression>},
-    CallExpr(String, Vec<Expression>)
-}
-
-fn parse_primary_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    match tokens.last() {
-        Some(&Ident(_)) => parse_ident_expr(tokens, settings),
-        Some(&Number(_)) => parse_literal_expr(tokens, settings),
-        Some(&If) => parse_conditional_expr(tokens, settings),
-        Some(&For) => parse_loop_expr(tokens, settings),
-        Some(&Var) => parse_var_expr(tokens, settings),
-        Some(&Operator(_)) => parse_unary_expr(tokens, settings),
-        Some(&OpeningParenthesis) => parse_parenthesis_expr(tokens, settings),
-        None => return NotComplete,
-        _ => error("unknow token when expecting an expression")
-    }
-}
-
-fn parse_var_expr(tokens : &mut Vec<Token>, settings : &mut ParserSettings) -> PartParsingResult<Expression> {
-    tokens.pop();
-    let mut parsed_tokens = vec![Var];
-    let mut vars = Vec::new();
-
-    loop {
-        let var_name = expect_token!(
-            [Ident(name), Ident(name.clone()), name] <= tokens,
-            parsed_tokens, "expected identifier list after var");
-
-        let init_expr = expect_token!(
-            [Operator(op), Operator(op.clone()), {
-                if op.as_str() != "=" {
-                    return error("expected '=' in variable initialization")
-                }
-                parse_try!(parse_expr, tokens, settings, parsed_tokens)
-            }]
-            else {LiteralExpr(0.0)}
-            <= tokens, parsed_tokens);
-
-        vars.push((var_name, init_expr));
-
-        expect_token!(
-            [Comma, Comma, ()]
-            else {break}
-            <= tokens, parsed_tokens);
-    }
-
-    expect_token!(
-        [In, In, ()] <= tokens,
-        parsed_tokens, "expected 'in' after var");
-
-    let body_expr = parse_try!(parse_expr, tokens, settings, parsed_tokens);
-
-    Good(VarExpr{vars: vars, body_expr: box body_expr}, parsed_tokens)
-}
+<<<src/parser.rs:mutable-var-parser>>>
 ```
 
 Here we add new AST entry, namely var expression. It consists of the vector of binding/value pairs
@@ -4517,33 +2644,7 @@ of bindings (if no value provided, we set it to 0). Finally we parse body expres
 Builder changes follow:
 
 ```rust
-            &parser::VarExpr{ref vars, ref body_expr} => {
-                let mut old_bindings = Vec::new();
-                let function = context.builder.get_insert_block().get_parent();
-                for var in vars.iter() {
-                    let (ref name, ref init_expr) = *var;
-                    let (init_value, _) = try!(init_expr.codegen(context, module_provider));
-                    let variable = create_entry_block_alloca(context, &function, name);
-                    context.builder.build_store(init_value, variable);
-                    old_bindings.push(context.named_values.remove(name));
-                    context.named_values.insert(name.clone(), variable);
-                }
-
-                let (body_value, _) = try!(body_expr.codegen(context, module_provider));
-
-                let mut old_iter = old_bindings.iter();
-                for var in vars.iter() {
-                    let (ref name, _) = *var;
-                    context.named_values.remove(name);
-
-                    match old_iter.next() {
-                        Some(&Some(value)) => {context.named_values.insert(name.clone(), value);},
-                        _ => ()
-                    };
-                }
-
-                Ok((body_value, false))
-            }
+<<<src/builder.rs:mutable-var-builder>>>
 ```
 
 We save old bindings, generate new ones and create allocas for them, insert them into context
