@@ -1,0 +1,8 @@
+[package]
+
+name = "iw"
+version = "0.0.1"
+authors = ["silverbirder<silverbirder@gmail.com>"]
+
+[dependencies]
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm12-0"] }
