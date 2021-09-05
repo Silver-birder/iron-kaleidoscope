@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use lexer::*;
 
@@ -6,6 +7,11 @@ pub use self::ASTNode::{
     ExternNode,
     FunctionNode
 };
+impl fmt::Display for ASTNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 pub use self::Expression::{
     LiteralExpr,
@@ -78,8 +84,16 @@ pub fn parse(tokens : &[Token], parsed_tree : &[ASTNode], settings : &mut Parser
     // using it as a stack
     rest.reverse();
 
+    // for r in rest.iter() {
+    //     println!("{}", &r.to_string());
+    // }
+
     // we will add new AST nodes to already parsed ones
     let mut ast = parsed_tree.to_vec();
+
+    // for a in ast.iter() {
+    //     println!("{}", &a.to_string());
+    // }
 
     loop {
         // look at the current token and determine what to parse

@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::fmt;
 
 pub use self::Token::{
     Def,
@@ -23,6 +24,12 @@ pub enum Token {
     Ident(String),
     Number(f64),
     Operator(String)
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
