@@ -1,4 +1,3 @@
-extern crate inkwell;
 use inkwell::context::Context;
 use inkwell::OptimizationLevel;
 
@@ -35,7 +34,6 @@ fn main() {
     // main関数は0を返す
     builder.build_return(Some(&i32_type.const_int(0, false)));
 
-    // module.print_to_file("foge.ll");
     // JIT実行エンジンを作成し、main関数を実行
     let execution_engine = module.create_jit_execution_engine(OptimizationLevel::Aggressive).unwrap();
     unsafe {
