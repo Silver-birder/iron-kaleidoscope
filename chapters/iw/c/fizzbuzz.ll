@@ -21,7 +21,7 @@ define void @fizzbuzz(i32 %0) local_unnamed_addr #0 {
   %7 = icmp eq i32 %3, 0
   %8 = icmp eq i32 %2, 0
   %9 = or i1 %8, %7
-  %10 = select i1 %8, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @str.5, i64 0, i64 0), i8* getelementptr inbounds ([5 x i8], [5 x i8]* @str, i64 0, i64 0)
+  %10 = select i1 %8, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @st1r.5, i64 0, i64 0), i8* getelementptr inbounds ([5 x i8], [5 x i8]* @str, i64 0, i64 0)
   br i1 %9, label %11, label %14
 
 11:                                               ; preds = %6, %1
