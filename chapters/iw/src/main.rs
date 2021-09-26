@@ -29,27 +29,32 @@ fn main() -> Result<(), Box<dyn Error>> {
     let function = module.add_function("fizzbuzz", fn_type, None);
     let block = context.append_basic_block(function, "entry");
     let builder = context.create_builder();
+    builder.position_at_end(block);
     let fb_string_ptr = builder.build_global_string_ptr("fizzbuzz", "fizzbuzz");
     let f_string_ptr = builder.build_global_string_ptr("fizz", "fizz");
     let b_string_ptr = builder.build_global_string_ptr("buzz", "buzz");
-    builder.position_at_end(block);
     let x = function.get_nth_param(0).unwrap().into_int_value();
     let x3 = builder.build_int_signed_rem(x, i64_type.const_int(3, false), "rem");
     let x5 = builder.build_int_signed_rem(x, i64_type.const_int(5, false), "rem");
     let x15 = builder.build_int_signed_rem(x, i64_type.const_int(15, false), "rem");
     let cmp = builder.build_int_compare(EQ, x3, i64_type.const_int(0, false), "if");
-    
+
     let then_bb = context.append_basic_block(function, "then");
     let else_bb = context.append_basic_block(function, "else");
+    let cont_bb = context.append_basic_block(function, "ifcont");
     builder.build_conditional_branch(cmp, then_bb, else_bb);
-    
+
     builder.position_at_end(then_bb);
-    builder.build_call(printf_function, &[fb_string_ptr.as_pointer_value().into()], "then");
+    builder.build_call(printf_function, &[b_string_ptr.as_pointer_value().into()], "then");
+    builder.build_unconditional_branch(cont_bb);
 
     builder.position_at_end(else_bb);
     builder.build_call(printf_function, &[f_string_ptr.as_pointer_value().into()], "then");
+    builder.build_unconditional_branch(cont_bb);
 
-    // module.print_to_file("main.ll");
+    builder.position_at_end(cont_bb);
+    builder.build_return(Some(&x));
+
     let e = module.create_jit_execution_engine(OptimizationLevel::None)?;
     unsafe {
         let x = 30u64;
