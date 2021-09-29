@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate swc_common;
 extern crate swc_ecma_parser;
+extern crate swc_ecma_ast;
 
 use std::path::Path;
 
@@ -10,6 +11,8 @@ use swc_common::{
     FileName, FilePathMapping, SourceMap,
 };
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
+use swc_ecma_ast::{Lit, Number};
+use swc_ecma_ast::Lit::Num;
 
 fn main() {
     let cm: Lrc<SourceMap> = Default::default();
@@ -50,6 +53,10 @@ fn main() {
 
 
     for b in _module.body {
-        println!("{:?}", b);
+        let stmt = b.stmt().unwrap();
+        let exprStmt = stmt.expr().unwrap();
+        let binExpr = exprStmt.expr.bin().unwrap();
+        let left_lit = binExpr.left.lit().unwrap();
+        // let right_lit = binExpr.right.lit().unwrap();
     }
 }
