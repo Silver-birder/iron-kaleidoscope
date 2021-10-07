@@ -6,8 +6,8 @@ target triple = "x86_64-apple-macosx11.0.0"
 @str = private unnamed_addr constant [14 x i8] c"Hello, world!\00", align 1
 
 ; Function Attrs: nofree nounwind ssp uwtable
-define i32 @main(i32 %0, i8** nocapture readnone %1) local_unnamed_addr #0 {
-  %3 = tail call i32 @puts(i8* nonnull dereferenceable(1) getelementptr inbounds ([14 x i8], [14 x i8]* @str, i64 0, i64 0))
+define i32 @main() local_unnamed_addr #0 {
+  %1 = tail call i32 @puts(i8* nonnull dereferenceable(1) getelementptr inbounds ([14 x i8], [14 x i8]* @str, i64 0, i64 0))
   ret i32 0
 }
 
