@@ -12,8 +12,8 @@ define i32 @sum(i32 %0, i32 %1) local_unnamed_addr #0 {
 }
 
 ; Function Attrs: nofree nounwind ssp uwtable
-define i32 @main(i32 %0, i8** nocapture readnone %1) local_unnamed_addr #1 {
-  %3 = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 3)
+define i32 @main() local_unnamed_addr #1 {
+  %1 = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 3)
   ret i32 0
 }
 

@@ -1,19 +1,11 @@
 #include <stdio.h>
+#include <stdlib.h>
 
-void loop(int n)
-{
-     int count;
-     for (count = 1; count <= n; count = count + 1)
-          printf("hello\n");
-}
 int main(void)
 {
-     printf("Please input the number.\n");
-
-     int i;
-     scanf("%d", &i);
-
-     loop(i);
+     int i = rand() % 5;
+     for (int count = 1; count <= i; count = count + 1)
+          printf("hello\n");
 
      return 0;
 }

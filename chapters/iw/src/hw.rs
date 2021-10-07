@@ -36,6 +36,7 @@ fn main() {
 
     // JIT実行エンジンを作成し、main関数を実行
     let execution_engine = module.create_jit_execution_engine(OptimizationLevel::Aggressive).unwrap();
+    module.print_to_file("main.ll");
     unsafe {
         execution_engine.get_function::<unsafe extern "C" fn()>("main").unwrap().call();
     }

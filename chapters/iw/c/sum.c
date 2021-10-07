@@ -5,7 +5,7 @@ int sum(int l, int r)
     return l + r;
 }
 
-int main(int argc, char **argv)
+int main(void)
 {
     int l = 1;
     int r = 2;
