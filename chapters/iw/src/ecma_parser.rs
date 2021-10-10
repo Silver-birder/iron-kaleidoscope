@@ -21,13 +21,13 @@ fn main() {
         Some(cm.clone()));
 
     // Real usage
-    let fm = cm
-        .load_file(Path::new("./src/test.js"))
-        .expect("failed to load test.js");
-    // let fm = cm.new_source_file(
-    //     FileName::Custom("test.js".into()),
-    //     "function foo() {}".into(),
-    // );
+    // let fm = cm
+    //     .load_file(Path::new("./src/test.js"))
+    //     .expect("failed to load test.js");
+    let fm = cm.new_source_file(
+        FileName::Custom("test.js".into()),
+        "function foo() {}".into(),
+    );
     let lexer = Lexer::new(
         // We want to parse ecmascript
         Syntax::Es(Default::default()),
@@ -50,30 +50,6 @@ fn main() {
             e.into_diagnostic(&handler).emit()
         })
         .expect("failed to parser module");
-
-
-    for b in _module.body {
-        let stmt = b.stmt().unwrap();
-        let exprStmt = stmt.expr().unwrap();
-        let binExpr = exprStmt.expr.bin().unwrap();
-        let left_lit = binExpr.left.lit().unwrap();
-        let right_lit = binExpr.right.lit().unwrap();
-        let left_value = match left_lit {
-            Num(n) => {
-                n.value
-            },
-            _ => {
-                0f64
-            }
-        };
-        let right_value = match right_lit {
-            Num(n) => {
-                n.value
-            },
-            _ => {
-                0f64
-            }
-        };
-        println!("{:?}", left_value + right_value);
-    }
+    
+    println!("{:?}", _module);
 }
